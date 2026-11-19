@@ -8164,18 +8164,174 @@
     };
     function wire(h) {
       if (h == '') { setTimeout(() => { if (location.hash == '' || location.hash == '#') location.hash = 'auth' }, 2600) }
-      if (h == 'auth') $('#af').onsubmit = e => { e.preventDefault(); const em = $('#em').value, pw = $('#pw').value; if (!/^\S+@\S+\.\S+$/.test(em) && !/^(?:\+?91[\s-]?)?[6-9]\d{9}$/.test(em.replace(/[\s-]/g, ''))) return $('#er').textContent = 'Enter a valid email or 10-digit mobile number.'; if (pw.length < 8) return $('#er').textContent = 'Password needs 8+ characters.'; $('#go').textContent = 'Signing in…'; setTimeout(() => location.hash = 'discover', 700) };
+
+      if (h == 'auth') {
+        const form = $('#af');
+        const error = $('#er');
+        const submit = $('#go');
+
+        let registerMode = false;
+
+        function setAuthMode(register) {
+          registerMode = register;
+
+          $('#registerFields').style.display = register ? 'block' : 'none';
+          $('#loginFields').style.display = register ? 'none' : 'block';
+
+          $('#authTitle').textContent = register
+            ? 'Create your Hive Account'
+            : 'Welcome to the Hive';
+
+          $('#authSubtitle').textContent = register
+            ? 'Join the running community.'
+            : 'Sign in to continue your journey.';
+
+          submit.textContent = register ? 'Create Account' : 'Sign in';
+          $('#authMode').textContent = register
+            ? 'Already have an account? Sign in'
+            : 'Create an account';
+
+          $('#pw').autocomplete = register ? 'new-password' : 'current-password';
+          error.textContent = '';
+        }
+
+        $('#authMode').onclick = () => setAuthMode(!registerMode);
+
+        $('#googleSignIn').onclick = () => {
+          error.textContent = 'Google sign-in will be connected after OAuth setup.';
+        };
+
+        form.onsubmit = async e => {
+          e.preventDefault();
+          error.textContent = '';
+
+          const password = $('#pw').value;
+
+          if (password.length < 8 || password.length > 128) {
+            error.textContent = 'Password must contain 8 to 128 characters.';
+            return;
+          }
+
+          let payload;
+
+          if (registerMode) {
+            const name = $('#fullName').value.trim();
+            const email = $('#regEmail').value.trim().toLowerCase();
+            const mobileInput = $('#regMobile').value.replace(/\D/g, '');
+            const mobile = mobileInput.length === 12 && mobileInput.startsWith('91')
+              ? mobileInput.slice(2)
+              : mobileInput;
+
+            if (!name || !email || !mobile) {
+              error.textContent = 'Please fill in all registration fields.';
+              return;
+            }
+
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+              error.textContent = 'Enter a valid email address.';
+              return;
+            }
+
+            if (!/^[6-9]\d{9}$/.test(mobile)) {
+              error.textContent = 'Enter a valid 10-digit Indian mobile number.';
+              return;
+            }
+
+            payload = {
+              action: 'register',
+              name,
+              email,
+              mobile,
+              password
+            };
+          } else {
+            let identifier = $('#em').value.trim();
+
+            if (!identifier) {
+              error.textContent = 'Enter your email or mobile number.';
+              return;
+            }
+
+            if (!identifier.includes('@')) {
+              const digits = identifier.replace(/\D/g, '');
+              identifier = digits.length === 12 && digits.startsWith('91')
+                ? digits.slice(2)
+                : digits;
+
+              if (!/^[6-9]\d{9}$/.test(identifier)) {
+                error.textContent = 'Enter a valid email or 10-digit mobile number.';
+                return;
+              }
+            }
+
+            payload = {
+              action: 'login',
+              identifier,
+              password
+            };
+          }
+
+          submit.disabled = true;
+          submit.textContent = registerMode ? 'Creating account…' : 'Signing in…';
+
+          try {
+            const response = await fetch(
+              'https://script.google.com/macros/s/AKfycbzIrsKUaPksXR8TsE6wcplblkR8l3S4Vm6L_RkG1UNoT5-EixdDvSa1wcyuRNjs-sm0rQ/exec',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'text/plain;charset=utf-8'
+                },
+                body: JSON.stringify(payload)
+              }
+            );
+
+            const result = await response.json();
+
+            if (!result.success) {
+              throw new Error(result.message || 'Request failed.');
+            }
+
+            if (registerMode) {
+              error.style.color = 'green';
+              error.textContent = 'Registration successful! Please sign in.';
+
+              $('#em').value = payload.email;
+              $('#pw').value = '';
+              setAuthMode(false);
+              error.style.color = 'green';
+              error.textContent = 'Account created successfully. Please sign in.';
+            } else {
+              if (!result.user) {
+                throw new Error('Login succeeded but the user profile was not returned.');
+              }
+
+              sessionStorage.setItem('hivecityUser', JSON.stringify(result.user));
+              location.hash = 'discover';
+            }
+
+          } catch (err) {
+            error.style.color = '#d33';
+            error.textContent = err.message ||
+              'Could not connect to the server. Please try again.';
+          } finally {
+            submit.disabled = false;
+            submit.textContent = registerMode ? 'Create Account' : 'Sign in';
+          }
+        };
+      }
+
       if (h == 'activity') {
         const w = [...document.querySelectorAll('.wk')]; w.forEach(c => c.onchange = () => { const v = Math.round(w.filter(x => x.checked).length / w.length * 100); $('#wr').style.setProperty('--v', v); $('#wp').textContent = v + '%' });
-        const f = n => String(n).padStart(2, '0'), u = () => { const t = S.run.t; $('#tm').textContent = f(t / 3600 | 0) + ':' + f(t / 60 % 60 | 0) + ':' + f(t % 60); $('#ds').textContent = S.run.d.toFixed(2); if (S.run.d > .05) $('#pc').textContent = f(t / S.run.d / 60 | 0) + ':' + f(t / S.run.d % 60 | 0) };
-        $('#st').onclick = () => { if (S.run.on) { S.run.on = 0; clearInterval(S.run.id); navigator.geolocation && S.run.w != null && navigator.geolocation.clearWatch(S.run.w); $('#st').textContent = 'Resume' } else { S.run.on = 1; $('#st').textContent = 'Pause'; S.run.id = setInterval(() => { S.run.t++; u() }, 1000); try { let l; S.run.w = navigator.geolocation.watchPosition(p => { const c = p.coords; if (l) { const a = Math.PI / 180, x = (c.longitude - l.longitude) * a * Math.cos(c.latitude * a), y = (c.latitude - l.latitude) * a; S.run.d += Math.hypot(x, y) * 6371 } l = c }, () => toast('Location blocked — time only')) } catch (e) { } } };
-        $('#fn').onclick = () => { clearInterval(S.run.id); S.run = { t: 0, on: 0, d: 0, id: 0 }; $('#st').textContent = 'Start'; u(); toast('Workout finished') }
-      }
-      document.querySelectorAll('.mc').forEach(c => c.onchange = () => { S.meals[c.dataset.i] = c.checked; sv(); go() });
-      if (h == 'shop') { $('#q').oninput = e => { S.q = e.target.value; go(1) }; $('#so').onchange = e => { S.sort = e.target.value; go() }; document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { S.cat = b.dataset.c; go() }); document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { S.cart[b.dataset.a] = (S.cart[b.dataset.a] || 0) + 1; sv(); b.textContent = 'ADDED ✓'; chrome(h); toast('Added to cart') }); document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { S.wish[b.dataset.w] = !S.wish[b.dataset.w]; sv(); b.textContent = S.wish[b.dataset.w] ? '♥' : '♡' }) }
-      if (h == 'events') document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { S.bk[b.dataset.e] = (S.bk[b.dataset.e] || 0) + 1; sv(); toast('Added to bookings'); b.textContent = 'Added ✓' });
-      if (h == 'bookings') { const ch = (a, f) => document.querySelectorAll(a).forEach(b => b.onclick = () => { const k = b.getAttribute(a.slice(1, -1)), o = k[0] == 'c' ? S.cart : S.bk, id = k.slice(1); f(o, id); sv(); go() }); ch('[data-p]', (o, i) => o[i]++); ch('[data-m]', (o, i) => { if (--o[i] < 1) delete o[i] }); ch('[data-r]', (o, i) => delete o[i]); document.querySelectorAll('#co').forEach(b => b.onclick = () => toast('Payment gateway not connected yet — no order placed')) }
-      if (h == 'assistant') { const A = { event: 'Next up: City Sunrise 10K on Sat 15 Nov. See Events.', shoe: 'Check Shoes in the Shop for road and everyday options.', human: 'Connecting you with a human teammate.' }; const say = t => { const c = $('#ch'); c.insertAdjacentHTML('beforeend', `<div class="msg me">${t.replace(/</g, '&lt;')}</div>`); const k = /event|run/i.test(t) ? 'event' : /shoe/i.test(t) ? 'shoe' : /human|agent/i.test(t) ? 'human' : 0; setTimeout(() => c.insertAdjacentHTML('beforeend', `<div class="msg ai">${k ? A[k] : 'I can help with events, shop and nutrition once connected to the knowledge base.'}</div>`), 500) }; $('#ci').onkeydown = e => { if (e.key == 'Enter' && e.target.value) { say(e.target.value); e.target.value = '' } }; document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => say(b.dataset.s)) }
+      const f = n => String(n).padStart(2, '0'), u = () => { const t = S.run.t; $('#tm').textContent = f(t / 3600 | 0) + ':' + f(t / 60 % 60 | 0) + ':' + f(t % 60); $('#ds').textContent = S.run.d.toFixed(2); if (S.run.d > .05) $('#pc').textContent = f(t / S.run.d / 60 | 0) + ':' + f(t / S.run.d % 60 | 0) };
+      $('#st').onclick = () => { if (S.run.on) { S.run.on = 0; clearInterval(S.run.id); navigator.geolocation && S.run.w != null && navigator.geolocation.clearWatch(S.run.w); $('#st').textContent = 'Resume' } else { S.run.on = 1; $('#st').textContent = 'Pause'; S.run.id = setInterval(() => { S.run.t++; u() }, 1000); try { let l; S.run.w = navigator.geolocation.watchPosition(p => { const c = p.coords; if (l) { const a = Math.PI / 180, x = (c.longitude - l.longitude) * a * Math.cos(c.latitude * a), y = (c.latitude - l.latitude) * a; S.run.d += Math.hypot(x, y) * 6371 } l = c }, () => toast('Location blocked — time only')) } catch (e) { } } };
+      $('#fn').onclick = () => { clearInterval(S.run.id); S.run = { t: 0, on: 0, d: 0, id: 0 }; $('#st').textContent = 'Start'; u(); toast('Workout finished') }
+    }
+    document.querySelectorAll('.mc').forEach(c => c.onchange = () => { S.meals[c.dataset.i] = c.checked; sv(); go() });
+    if (h == 'shop') { $('#q').oninput = e => { S.q = e.target.value; go(1) }; $('#so').onchange = e => { S.sort = e.target.value; go() }; document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { S.cat = b.dataset.c; go() }); document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { S.cart[b.dataset.a] = (S.cart[b.dataset.a] || 0) + 1; sv(); b.textContent = 'ADDED ✓'; chrome(h); toast('Added to cart') }); document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { S.wish[b.dataset.w] = !S.wish[b.dataset.w]; sv(); b.textContent = S.wish[b.dataset.w] ? '♥' : '♡' }) }
+    if (h == 'events') document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { S.bk[b.dataset.e] = (S.bk[b.dataset.e] || 0) + 1; sv(); toast('Added to bookings'); b.textContent = 'Added ✓' });
+    if (h == 'bookings') { const ch = (a, f) => document.querySelectorAll(a).forEach(b => b.onclick = () => { const k = b.getAttribute(a.slice(1, -1)), o = k[0] == 'c' ? S.cart : S.bk, id = k.slice(1); f(o, id); sv(); go() }); ch('[data-p]', (o, i) => o[i]++); ch('[data-m]', (o, i) => { if (--o[i] < 1) delete o[i] }); ch('[data-r]', (o, i) => delete o[i]); document.querySelectorAll('#co').forEach(b => b.onclick = () => toast('Payment gateway not connected yet — no order placed')) }
+    if (h == 'assistant') { const A = { event: 'Next up: City Sunrise 10K on Sat 15 Nov. See Events.', shoe: 'Check Shoes in the Shop for road and everyday options.', human: 'Connecting you with a human teammate.' }; const say = t => { const c = $('#ch'); c.insertAdjacentHTML('beforeend', `<div class="msg me">${t.replace(/</g, '&lt;')}</div>`); const k = /event|run/i.test(t) ? 'event' : /shoe/i.test(t) ? 'shoe' : /human|agent/i.test(t) ? 'human' : 0; setTimeout(() => c.insertAdjacentHTML('beforeend', `<div class="msg ai">${k ? A[k] : 'I can help with events, shop and nutrition once connected to the knowledge base.'}</div>`), 500) }; $('#ci').onkeydown = e => { if (e.key == 'Enter' && e.target.value) { say(e.target.value); e.target.value = '' } }; document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => say(b.dataset.s)) }
     }
     function go(keep) { const h = location.hash.slice(1), v = V[h] || V.discover, q = keep && document.activeElement.id; app.innerHTML = v(); chrome(h); wire(h); fx(h); if (q) { const e = $('#' + q); if (e) { e.focus(); e.setSelectionRange(99, 99) } } if (!keep) scrollTo(0, 0) }
     document.body.insertAdjacentHTML('beforeend', '<div id="sb"></div><div id="cg"></div><div id="lb"></div>');
@@ -8246,7 +8402,56 @@
     chrome = function (h) { const sp = h == '' || h == 'auth', n = cnt() + bc(); $('#nav').innerHTML = sp ? '' : `<nav class='top'><button class='avb' onclick='prof()' aria-label='Open profile'><img src='${AV[4]}' alt='Your profile'></button><b>HIVE CITY</b>${R.map(([r, l]) => `<a href='#${r}' class='${h == r ? 'on' : ''} ${['discover', 'shop', 'bookings'].includes(r) ? 'keep' : ''}'>${l}${r == 'bookings' && n ? ' (' + n + ')' : ''}</a>`).join('')}<button class='chip' onclick='theme()' aria-label='Toggle theme'>◐</button></nav>`; $('#bn').innerHTML = sp ? '' : `<nav class='bot'>${[['discover', 'Home'], ['community', 'Social'], ['activity', 'Activity'], ['nutrition', 'Food'], ['events', 'Events']].map(([r, l]) => `<a href='#${r}' class='${h == r ? 'on' : ''}'>${l}</a>`).join('')}</nav>` };
     function sh0() { $('#sh').innerHTML = '' }
     function prof() { $('#sh').innerHTML = `<div class='lbx' style='place-items:stretch end;z-index:84' onclick='if(event.target==this)sh0()'><div class='drawer'><img class='cv' src='${IM[89]}' alt=''><img class='me2' src='${AV[4]}' alt='Alex Rivera'><button class='chip' style='position:absolute;top:10px;right:10px' onclick='sh0()' aria-label='Close'>✕</button><div style='padding:52px 18px 18px'><h2 style='margin:0'>Alex Rivera</h2><span class='tag'>@alex.runs · Hive member</span><div class='grid' style='grid-template-columns:repeat(3,1fr);margin:14px 0'>${[['48', 'runs'], ['312', 'km'], ['12', 'day streak']].map(s => `<div class='card' style='padding:10px;text-align:center'><b class='num' style='font-size:22px'>${s[0]}</b><br><small>${s[1]}</small></div>`).join('')}</div><h3>Badges</h3><div class='row'>${[' 7-day streak', ' First 5K', ' Early bird', ' Fuel pro'].map(b => `<span class='pill'>${b}</span>`).join('')}</div><h3>Tickets & orders</h3><a class='btn g' href='#bookings' onclick='sh0()'>Open cart & tickets</a><h3>Settings</h3><p class='row'><button class='chip' onclick='theme()'>◐ Light / dark</button><button class='chip' onclick='toast(&quot;Notifications on&quot;)'> Notifications</button></p><button class='btn' onclick='sh0();location.hash=&quot;auth&quot;'>Log out</button></div></div></div>` }
-    V.auth = () => `<div class='grid' style='grid-template-columns:repeat(auto-fit,minmax(300px,1fr));min-height:88vh;gap:0;border-radius:28px;overflow:hidden;border:1px solid var(--bd)'><div class='hero' style='border-radius:0;min-height:360px'><img src='${IM[90]}' alt='Runner in golden light'><div><p class='it' style='color:#C7F36B'>Your next quest starts here.</p><h1 class='big'>FIND YOUR PACE</h1><div class='row'>${[92, 5, 93, 91].map(n => `<img src='${AV[n]}' alt='' style='position:static;width:40px;height:40px;border-radius:50%;animation:none'>`).join('')}<span style='font-size:13px'>Join the crew</span></div></div></div><form class='card' id='af' style='align-self:center;border:0;border-radius:0;padding:36px' novalidate><h2>Welcome to the Hive</h2><p class='it'>Sign in or join.</p><p><input type='text' id='em' placeholder='Email / Mobile no' aria-label='Email or mobile number' autocomplete='username'></p><p><input type='password' id='pw' placeholder='Password (8+ chars)' aria-label='Password'></p><p id='er' style='color:#d33;min-height:20px;margin:0'></p><button class='btn' id='go'>Sign in</button> </form></div>`;
+
+    V.auth = () => `
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));min-height:88vh;gap:0;border-radius:28px;overflow:hidden;border:1px solid var(--bd)">
+  <div class="hero" style="border-radius:0;min-height:360px">
+    <img src="${IM[90]}" alt="Runner in golden light">
+    <div>
+      <p class="it" style="color:#C7F36B">Your next quest starts here.</p>
+      <h1 class="big">FIND YOUR PACE</h1>
+      <div class="row">
+        ${[92, 5, 93, 91].map(n => `<img src="${AV[n]}" alt="" style="position:static;width:40px;height:40px;border-radius:50%;animation:none">`).join('')}
+        <span style="font-size:13px">Join the crew</span>
+      </div>
+    </div>
+  </div>
+
+  <form class="card" id="af" style="align-self:center;border:0;border-radius:0;padding:36px" novalidate>
+    <h2 id="authTitle">Welcome to the Hive</h2>
+    <p class="it" id="authSubtitle">Sign in to continue your journey.</p>
+
+    <div id="registerFields" style="display:none">
+      <p><input type="text" id="fullName" placeholder="Full name" autocomplete="name"></p>
+      <p><input type="email" id="regEmail" placeholder="Email address" autocomplete="email"></p>
+      <p><input type="tel" id="regMobile" placeholder="10-digit mobile number" autocomplete="tel"></p>
+    </div>
+
+    <div id="loginFields">
+      <p><input type="text" id="em" placeholder="Email / Mobile no" aria-label="Email or mobile number" autocomplete="username"></p>
+    </div>
+
+    <p><input type="password" id="pw" placeholder="Password (8+ chars)" aria-label="Password" autocomplete="current-password"></p>
+
+    <p id="er" style="color:#d33;min-height:20px;margin:0"></p>
+
+    <button class="btn" id="go" type="submit">Sign in</button>
+
+    <p style="text-align:center;margin-top:18px">
+      <button type="button" id="authMode" class="btn" style="background:transparent;color:inherit;border:1px solid var(--bd)">
+        Create an account
+      </button>
+    </p>
+
+    <div style="text-align:center;margin:15px 0">OR</div>
+
+    <button type="button" id="googleSignIn" class="btn" style="background:transparent;color:inherit;border:1px solid var(--bd);width:100%">
+      <strong style="color:#4285F4;font-size:18px">G</strong>
+      &nbsp; Continue with Google
+    </button>
+  </form>
+</div>`;
+
     const d0 = V.discover; V.discover = () => d0().replace("<div class='hero' style='min-height:70vh", `<h2 class='stp rv' style='margin-top:60px'>Fuel the miles.</h2><div class='bento'><a class='b1 rv' href='#nutrition'><img src='${IM[15]}' alt='Colourful plate of healthy food'></a>${[10, 12, 21].map(n => `<a class='rv' href='#nutrition'><img src='${IM[n]}' alt='Healthy meal'></a>`).join('')}<div class='card' style='display:grid;place-items:center;text-align:center'><div><h3>Tap the pyramid</h3><a class='btn' href='#nutrition'>Build your plate</a></div></div></div>
 <h2 class='stp rv' style='margin-top:60px'>Gear up.</h2><div class='bento'>${[[61, 'b1'], [62, ''], [64, ''], [57, ''], [58, '']].map(x => `<a class='${x[1]} rv' href='#shop'><img src='${IM[x[0]]}' alt='Sports gear'></a>`).join('')}</div>
 <h2 class='stp rv' style='margin-top:60px'>Moments from the crew.</h2><div class='wall'>${[3, 89, 15, 91, 96, 5, 87, 93, 86].map(n => `<img class='rv' loading='lazy' src='${IM[n]}' alt='Community moment'>`).join('')}</div>
