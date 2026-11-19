@@ -1,35 +1,27 @@
 ﻿/**
- * HIVE CITY - Google Apps Script Backend (Code.gs)
- * Paste this in your Google Apps Script editor (https://script.google.com)
- * linked to your Google Sheet.
+ * =========================================================================
+ * HIVE CITY - BACKEND FOR GOOGLE APPS SCRIPT (Google Sheets)
+ * =========================================================================
+ * 1. Open your Google Sheet.
+ * 2. Click: Extensions -> Apps Script.
+ * 3. Delete everything in the editor, paste this entire file, and click Save.
+ * 4. IMPORTANT: Click Deploy -> Manage deployments -> Edit (pencil) ->
+ *    Select "New version" -> Click Deploy.
+ * =========================================================================
  */
 
-// 1. Enter your Google Sheet ID or leave as ActiveSpreadsheet if container-bound
 function getSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName("Users");
+  
+  // If the sheet does not exist yet, create it with column headers
   if (!sheet) {
     sheet = ss.insertSheet("Users");
-    // Create headers if new sheet
     sheet.appendRow(["ID", "Name", "Email", "Mobile", "Password", "CreatedAt"]);
     sheet.getRange(1, 1, 1, 6).setFontWeight("bold");
+    sheet.setFrozenRows(1);
   }
   return sheet;
-}
-
-// Simple and reliable SHA-256 hash (or store as plain text if preferred)
-function hashPassword(password) {
-  if (!password) return "";
-  var rawBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(password), Utilities.Charset.UTF_8);
-  var hash = "";
-  for (var i = 0; i < rawBytes.length; i++) {
-    var byteVal = rawBytes[i];
-    if (byteVal < 0) byteVal += 256;
-    var hex = byteVal.toString(16);
-    if (hex.length === 1) hex = "0" + hex;
-    hash += hex;
-  }
-  return hash;
 }
 
 function doPost(e) {
@@ -37,79 +29,85 @@ function doPost(e) {
   try {
     lock.waitLock(10000);
   } catch (err) {
-    return jsonResponse({ success: false, message: "Server is busy. Please try again." });
+    return createJsonResponse({ success: false, message: "Server is busy. Please try again." });
   }
 
   try {
-    var data = {};
-    if (e && e.postData && e.postData.contents) {
-      data = JSON.parse(e.postData.contents);
-    } else {
-      return jsonResponse({ success: false, message: "Empty request body" });
+    if (!e || !e.postData || !e.postData.contents) {
+      return createJsonResponse({ success: false, message: "No data received in request." });
     }
 
+    var data = JSON.parse(e.postData.contents);
     var sheet = getSheet();
-    var action = data.action;
+    var action = (data.action || "").toString().toLowerCase().trim();
 
-    // ==========================================
-    // ACTION: REGISTER
-    // "user creating the password do not check in database leave it and store in excel"
-    // ==========================================
+    // ---------------------------------------------------------------------
+    // 1. REGISTER (SIGN UP)
+    // Directly saves user & password into the sheet without extra checks
+    // ---------------------------------------------------------------------
     if (action === "register") {
       var name = (data.name || "").toString().trim();
       var email = (data.email || "").toString().trim().toLowerCase();
       var mobile = (data.mobile || "").toString().trim();
-      var rawPassword = (data.password || "").toString();
+      var password = (data.password || "").toString();
 
-      if (!email || !rawPassword) {
-        return jsonResponse({ success: false, message: "Email and password are required." });
+      if (!email || !password) {
+        return createJsonResponse({ success: false, message: "Email and password are required." });
       }
 
-      var hashedPassword = hashPassword(rawPassword);
       var id = Utilities.getUuid();
-      var createdAt = new Date().toISOString();
+      var createdAt = new Date().toLocaleString();
 
-      // Directly store in Google Sheet (Excel) without blocking or duplicate check
-      sheet.appendRow([id, name, email, mobile, hashedPassword, createdAt]);
+      // Append row directly into Google Sheet
+      sheet.appendRow([id, name, email, mobile, password, createdAt]);
 
-      return jsonResponse({
+      return createJsonResponse({
         success: true,
-        message: "Account created successfully."
+        message: "Account created successfully! Please sign in."
       });
     }
 
-    // ==========================================
-    // ACTION: LOGIN
-    // "whethere user clicking sign in option then check the mail and password"
-    // ==========================================
+    // ---------------------------------------------------------------------
+    // 2. LOGIN (SIGN IN)
+    // Checks email or mobile, then verifies password against the sheet
+    // ---------------------------------------------------------------------
     if (action === "login") {
       var identifier = (data.identifier || "").toString().trim().toLowerCase();
-      var rawPassword = (data.password || "").toString();
+      var inputPassword = (data.password || "").toString();
 
-      if (!identifier || !rawPassword) {
-        return jsonResponse({ success: false, message: "Identifier and password required." });
+      if (!identifier || !inputPassword) {
+        return createJsonResponse({ success: false, message: "Please enter your email/mobile and password." });
       }
 
-      var hashedPassword = hashPassword(rawPassword);
       var rows = sheet.getDataRange().getValues();
-
-      // Header is row 0: [ID, Name, Email, Mobile, Password, CreatedAt]
       var matchedUser = null;
 
+      // Normalize input mobile number (digits only) in case user logged in with phone
+      var inputDigits = identifier.replace(/\D/g, "");
+      if (inputDigits.length === 12 && inputDigits.indexOf("91") === 0) {
+        inputDigits = inputDigits.substring(2);
+      }
+
+      // Loop through all rows in sheet (Row index 0 is header)
       for (var i = 1; i < rows.length; i++) {
+        var rowName = (rows[i][1] || "").toString().trim();
         var rowEmail = (rows[i][2] || "").toString().trim().toLowerCase();
         var rowMobile = (rows[i][3] || "").toString().trim();
-        var rowPass = (rows[i][4] || "").toString().trim();
+        var rowPassword = (rows[i][4] || "").toString();
 
-        // Check if identifier matches email or mobile
+        var rowMobileDigits = rowMobile.replace(/\D/g, "");
+        if (rowMobileDigits.length === 12 && rowMobileDigits.indexOf("91") === 0) {
+          rowMobileDigits = rowMobileDigits.substring(2);
+        }
+
         var isEmailMatch = (identifier === rowEmail);
-        var isMobileMatch = (identifier.replace(/\D/g, "") === rowMobile.replace(/\D/g, ""));
+        var isMobileMatch = (inputDigits !== "" && inputDigits === rowMobileDigits);
 
-        if ((isEmailMatch || isMobileMatch)) {
-          // Check password (supports hashed and plain text if migrated)
-          if (rowPass === hashedPassword || rowPass === rawPassword) {
+        if (isEmailMatch || isMobileMatch) {
+          // Verify password
+          if (rowPassword === inputPassword) {
             matchedUser = {
-              name: rows[i][1],
+              name: rowName,
               email: rowEmail,
               mobile: rowMobile
             };
@@ -119,32 +117,32 @@ function doPost(e) {
       }
 
       if (matchedUser) {
-        return jsonResponse({
+        return createJsonResponse({
           success: true,
           user: matchedUser
         });
       } else {
-        return jsonResponse({
+        return createJsonResponse({
           success: false,
           message: "Invalid email/mobile or password."
         });
       }
     }
 
-    return jsonResponse({ success: false, message: "Unknown action: " + action });
+    return createJsonResponse({ success: false, message: "Unknown action: " + action });
 
-  } catch (error) {
-    return jsonResponse({ success: false, message: error.message || error.toString() });
+  } catch (err) {
+    return createJsonResponse({ success: false, message: err.message || err.toString() });
   } finally {
     lock.releaseLock();
   }
 }
 
 function doGet(e) {
-  return jsonResponse({ success: true, message: "HIVE CITY API is active." });
+  return createJsonResponse({ success: true, message: "HIVE CITY API is online and working!" });
 }
 
-function jsonResponse(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
