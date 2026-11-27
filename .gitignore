@@ -1,0 +1,34 @@
+# Allow only README.md, .gitignore, hivecity_structured/, and hivecity_admin/ at root
+/*
+!/.gitignore
+!/README.md
+!/hivecity_structured/
+!/hivecity_admin/
+
+# Secrets, environment files & private credentials
+.env
+.env.*
+**/.env
+**/.env.*
+*.zip
+**/private/
+**/private/**
+*service-account*.json
+**/*service-account*.json
+*.pem
+*.key
+
+# Local runtime PII / fallback JSON stores (recreated automatically at runtime)
+hivecity_admin/server/*_store.json
+hivecity_admin/server/admin_users.json
+hivecity_admin/server/admin_config.json
+
+# Dependencies, build outputs, logs & OS artifacts
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.manus-logs/
+**/.manus-logs/
+.DS_Store
+Thumbs.db

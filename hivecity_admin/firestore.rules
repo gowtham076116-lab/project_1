@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPER FUNCTIONS FOR ROLE-BASED ACCESS & PERMISSIONS
+    // =========================================================================
+
+    // Check if user is authenticated with Firebase Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is an authorized Administrator:
+    // 1. Email matches the authorized admin address (hivecity10@gmail.com)
+    // 2. OR UID exists in the dedicated "admins" Firestore collection
+    // 3. OR custom admin claim is present on the auth token
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'hivecity10@gmail.com' ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'hivecity10@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.admin == true
+      );
+    }
+
+    // Owner check for personal user accounts
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // =========================================================================
+    // 1. MASTER ADMIN BYPASS (Full read & write access across ALL collections)
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 2. DEDICATED ADMINS COLLECTION (Air-gapped from regular users)
+    // =========================================================================
+    match /admins/{adminId} {
+      // Admins have full access
+      allow read, write: if isAdmin();
+
+      // Authorized email can write their own initial admin profile
+      allow create, update: if isAuthenticated() && (
+        request.auth.uid == adminId &&
+        request.auth.token.email == 'hivecity10@gmail.com'
+      );
+    }
+
+    // =========================================================================
+    // 3. USERS COLLECTION (Athletes & Community Members)
+    // =========================================================================
+    match /users/{userId} {
+      // Admins can read & manage all users (status, moderation, profile suggestions)
+      // Authenticated athletes can view profiles
+      allow read: if isAuthenticated() || isAdmin();
+
+      // Individual athletes can create and update their own profile; admins have full write
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+
+      // Subcollections under users (suggestions, custom recipes, activities)
+      match /{subcollection=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // =========================================================================
+    // 4. PROFILE SUGGESTIONS & FEEDBACK
+    // =========================================================================
+    match /profile_suggestions/{suggestionId} {
+      allow read, write: if isAdmin();
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    // =========================================================================
+    // 5. PUBLIC & ATHLETIC COLLECTIONS (Events, Recipes, Nutrition, Posts)
+    // =========================================================================
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /shared_nutrition/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isAdmin();
+    }
+
+    match /recipes/{recipeId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isAdmin();
+    }
+
+    match /social_posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+    }
+
+    match /follows/{followId} {
+      allow read, write: if isAuthenticated() || isAdmin();
+    }
+
+    match /follow_requests/{requestId} {
+      allow read, write: if isAuthenticated() || isAdmin();
+    }
+
+    match /post_reposts/{repostId} {
+      allow read, write: if isAuthenticated() || isAdmin();
+    }
+
+    // =========================================================================
+    // 6. COMMUNITY SESSIONS, REGISTRATIONS & CENTRAL PAYMENTS LEDGER
+    // =========================================================================
+    match /community_sessions/{sessionId} {
+      // Public & authenticated users can read published sessions; admins read/write all
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /community_session_registrations/{registrationId} {
+      // Users can read only their own registrations; cannot tamper with paymentStatus/registrationStatus
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      // Central Finance Ledger: users can read only their own payment records; writes restricted to trusted backend/admin
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /community_campaigns/{campaignId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /support_tickets/{ticketId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /settings/{docId} {
+      // User-facing site subscribes via onSnapshot() to settings/platform; writes restricted to admins
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

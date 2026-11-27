@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>HIVE CITY</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/images/favicon-round.png?v=3" />
+    <link rel="shortcut icon" type="image/png" href="./assets/images/favicon-round.png?v=3" />
+    <script src="./shop-links.js?v=5"></script>
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#E8E4D8">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Sora:wght@500..800&family=Manrope:wght@400..700&family=Geist+Mono:wght@500..700&display=swap"
+        rel="stylesheet">
+    <script>(() => {
+            try {
+                var k = localStorage.getItem('hv-theme'); if (!k) { var s = JSON.parse(localStorage.getItem('hv') || '{}'); k = s.th }
+                var t = k || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'), r = document.documentElement; r.dataset.theme = t; r.style.colorScheme = t;
+                if (t == 'dark') document.querySelector('meta[name=theme-color]').content = '#0D110E'
+            } catch (e) { document.documentElement.dataset.theme = 'light' }
+        })()</script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@500&family=Manrope:wght@400;600&family=DM+Sans:ital@1&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./css/styles.css">
+    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap"
+        rel="stylesheet">
+    
+    
+
+    
+
+    
+    <!-- Hivecity self-contained build: all 150 recipe photos embedded locally -->
+</head>
+
+<body>
+    <div id="nav"></div>
+    <main id="app"></main>
+    <div id="bn"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    
+    <script src="./js/01-config-and-data.js"></script>
+  <script src="./js/02-core-features.js"></script>
+    
+    
+    <script src="./js/03-init-and-events.js"></script>
+</body>
+
+</html>
